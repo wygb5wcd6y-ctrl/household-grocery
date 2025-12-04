@@ -40,6 +40,38 @@ function App() {
   useEffect(() => {
     if (selectedHousehold) {
       fetchItems()
+
+      // Set up real-time subscription
+      const channel = supabase
+        .channel('grocery-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // Listen to INSERT, UPDATE, DELETE
+            schema: 'public',
+            table: 'grocery_items',
+            filter: `household_id=eq.${selectedHousehold.id}`
+          },
+          (payload) => {
+            console.log('Real-time update:', payload)
+            
+            if (payload.eventType === 'INSERT') {
+              setItems(prev => [payload.new as GroceryItem, ...prev])
+            } else if (payload.eventType === 'UPDATE') {
+              setItems(prev => prev.map(item => 
+                item.id === payload.new.id ? payload.new as GroceryItem : item
+              ))
+            } else if (payload.eventType === 'DELETE') {
+              setItems(prev => prev.filter(item => item.id !== payload.old.id))
+            }
+          }
+        )
+        .subscribe()
+
+      // Cleanup subscription when household changes or component unmounts
+      return () => {
+        supabase.removeChannel(channel)
+      }
     }
   }, [selectedHousehold])
 
@@ -67,7 +99,7 @@ function App() {
     if (error) console.error('Error adding item:', error)
     else {
       setNewItem('')
-      fetchItems()
+      // No need to fetchItems() - real-time will handle it!
     }
   }
 
@@ -79,7 +111,7 @@ function App() {
       .eq('id', id)
 
     if (error) console.error('Error updating item:', error)
-    else fetchItems()
+    // No need to fetchItems() - real-time will handle it!
   }
 
   async function deleteItem(id: string) {
@@ -89,78 +121,4 @@ function App() {
       .eq('id', id)
 
     if (error) console.error('Error deleting item:', error)
-    else fetchItems()
-  }
-
-  async function signOut() {
-    await supabase.auth.signOut()
-    setSelectedHousehold(null)
-    setItems([])
-  }
-
-  if (loading) return <p style={{ textAlign: 'center', marginTop: '100px' }}>Loading...</p>
-  if (!user) return <Auth />
-
-  return (
-    <div style={{ maxWidth: '500px', margin: '0 auto', padding: '20px', fontFamily: 'system-ui' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-        <h1 style={{ margin: 0 }}>🛒 Grocery List</h1>
-        <button 
-          onClick={signOut}
-          style={{ padding: '8px 12px', backgroundColor: '#6b7280', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-        >
-          Sign Out
-        </button>
-      </div>
-
-      <p style={{ color: '#666', marginBottom: '15px' }}>Signed in as {user.email}</p>
-
-      <HouseholdSelector
-        userId={user.id}
-        selectedHousehold={selectedHousehold}
-        onSelect={setSelectedHousehold}
-      />
-
-      {selectedHousehold ? (
-        <>
-          <form onSubmit={addItem} style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-            <input
-              type="text"
-              value={newItem}
-              onChange={(e) => setNewItem(e.target.value)}
-              placeholder="Add an item..."
-              style={{ flex: 1, padding: '10px', fontSize: '16px', borderRadius: '6px', border: '1px solid #ccc' }}
-            />
-            <button type="submit" style={{ padding: '10px 20px', fontSize: '16px', backgroundColor: '#22c55e', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-              Add
-            </button>
-          </form>
-
-          <ul style={{ listStyle: 'none', padding: 0 }}>
-            {items.length === 0 && <p style={{ color: '#888' }}>No items yet. Add something!</p>}
-            {items.map((item) => (
-              <li key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', borderBottom: '1px solid #eee' }}>
-                <input
-                  type="checkbox"
-                  checked={item.status === 'bought'}
-                  onChange={() => toggleBought(item.id, item.status)}
-                  style={{ width: '20px', height: '20px' }}
-                />
-                <span style={{ flex: 1, textDecoration: item.status === 'bought' ? 'line-through' : 'none', color: item.status === 'bought' ? '#888' : 'inherit' }}>
-                  {item.name}
-                </span>
-                <button onClick={() => deleteItem(item.id)} style={{ padding: '5px 10px', backgroundColor: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                  Delete
-                </button>
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : (
-        <p style={{ textAlign: 'center', color: '#666' }}>Create or select a household to see your grocery list.</p>
-      )}
-    </div>
-  )
-}
-
-export default App
+    // No need to fetchItems() - real-time will handle it
