@@ -66,7 +66,9 @@ function App() {
             }
           }
         )
-        .subscribe()
+        .subscribe((status) => {
+  console.log('Subscription status:', status)
+})
 
       // Cleanup subscription when household changes or component unmounts
       return () => {
